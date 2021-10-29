@@ -1,0 +1,327 @@
+#!/bin/bash
+SCLIMONDIR="$HOME/.config/sclimon"
+PIDFILE=$HOME/.sclimon.pid
+
+# Create $HOME-User directories and empty config file
+mkdir -p $SCLIMONDIR/{conf,flags}
+touch $SCLIMONDIR/config
+
+# trap ctrl-c key stroke and call CTRL_C function to exit and clear Shell
+trap CTRL_C INT
+
+function CTRL_C() {
+  tput clear
+  tput cnorm
+  rm $PIDFILE
+  exit 0
+}
+
+usage()
+{
+cat <<EOF
+Usage: $(basename $0) [options]
+Options:
+  -a    Show all stats
+  -d    Show only failed checks
+  -h    Show this help page
+
+EOF
+}
+
+while [ "$1" ]; do
+  case "$1" in
+    -a)
+      shift
+      file="$1"
+      source="all"
+      ;;
+    -d)
+      shift
+      host="$1"
+      source="dashboard"
+      ;;
+    -h)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "see --help for usage"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+# Path to default configuration file
+source $SCLIMONDIR/config
+
+# Text formating options
+padding="                    "
+TXTYELLOW=$(tput setaf 3)
+TXTGREEN=$(tput setaf 2)
+TXTRED=$(tput setaf 1)
+TXTNORMAL=$(tput sgr0)
+TXTBLINK=$(tput blink)
+TXTBOLD=$(tput bold)
+TXTDIM=$(tput dim)
+
+# Mail credentials from configuration file 'config'
+CREDENTIALS=$(echo -ne "\0$FROMMAIL\0$PASSWORD" | base64 | awk '{printf "AUTH PLAIN "$0}')
+LOGIN="$SCLIMONDIR/login.tmp"
+
+# Sendmail via openssl client from $FROMMAIL to $TOMAIL from the configuration file 'config'
+SENDMAIL()
+{
+	openssl s_client -brief -tls1_2 -connect $MAILSERVER:465  < $LOGIN
+}
+
+# URL Check for *.conf files in conf/ with 'Web' TYPE
+URLCHECK() {
+curl -iL --silent "$PROTOCOL://$DOMAIN:$PORT" | grep -c "$PATTERN";
+}
+
+PINGCHECK() {
+ping -c 1 $HOST &> /dev/null && echo 1 || echo 0
+}
+
+SSLCHECK() {
+  echo | openssl s_client -connect $DOMAIN:$PORT -servername $DOMAIN 2>/dev/null | openssl x509 -noout -text -certopt no_header,no_version,no_serial,no_signame,no_pubkey,no_sigdump,no_aux | grep Not\ After\ :| sed -e 's/.* : //g' -e 's/GMT//g';
+}
+
+PINGCHECKPO() {
+  printf "${TXTDIM}%s%s%s%s %s\n" "$TITLE" "${padding:${#TITLE}}" "${TXTBOLD}${TXTGREEN}[UP]  ${TXTNORMAL}" "${padding:${#HEADLINE2}}" "$TYPE "
+   if [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+     rm "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+   fi
+}
+
+PINGCHECKNE() {
+  printf "%s%s%s%s %s\n" "$TITLE" "${padding:${#TITLE}}" "${TXTBOLD}${TXTBLINK}${TXTRED}[DOWN]${TXTNORMAL}" "${padding:${#HEADLINE2}}" "$TYPE "
+    if  [ ! -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+      touch "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+    elif [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+      if [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -lt $TRESHOLD ]]; then
+        date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
+      elif [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -eq $TRESHOLD ]]; then
+        date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
+        echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+cat <<EOF >> "$SCLIMONDIR/login.tmp"
+MAIL FROM: $FROMMAIL
+rcpt to: $TOMAIL
+DATA
+From: $FROMMAIL
+Subject: [Monitoring] 🚨🚨🚨 Alarm $TITLE is down
+
+FYI: $TITLE is down since $(head -n 1 "$SCLIMONDIR/flags/$TITLE.ALARM.flag")
+.
+QUIT
+EOF
+        SENDMAIL 2&>1 >/dev/null
+        rm "$SCLIMONDIR/login.tmp"
+      elif [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -gt $TRESHOLD ]]; then
+      :
+    fi
+  fi
+}
+
+WEBCHECKPO() {
+  printf "${TXTDIM}%-20s%-36s%s%s %s\n" "$(echo $TITLE| cut -c1-20)"  "${TXTBOLD}${TXTGREEN}[UP]  ${TXTNORMAL}" "$TYPE "
+if [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+  rm "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+fi
+}
+
+WEBCHECKNE() {
+  printf "${TXTDIM}%-20s%-40s%s%s %s\n" "$(echo $TITLE| cut -c1-20)" "${TXTBOLD}${TXTBLINK}${TXTRED}[DOWN]${TXTNORMAL}" "$TYPE "
+     if  [ ! -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+       touch "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+     elif [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+       if [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -lt $TRESHOLD ]]; then
+         date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
+       elif [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -eq $TRESHOLD ]]; then
+         date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
+         echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+cat <<EOF >> "$SCLIMONDIR/login.tmp"
+MAIL FROM: $FROMMAIL
+rcpt to: $TOMAIL
+DATA
+From: $FROMMAIL
+Subject: [Monitoring] 🚨🚨🚨 Alarm $TITLE is down
+
+FYI: $TITLE is down since $(date)
+.
+QUIT
+EOF
+      SENDMAIL 2&>1 >/dev/null
+      rm "$SCLIMONDIR/login.tmp"
+    elif [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -gt $TRESHOLD ]]; then
+      :
+   fi
+fi
+}
+
+SSLMAILWARN() {
+echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+cat <<EOF >> "$SCLIMONDIR/login.tmp"
+MAIL FROM: $FROMMAIL
+rcpt to: $TOMAIL
+DATA
+From: $FROMMAIL
+Subject: [Monitoring] 🚨🚨🚨 Alarm CERT for $TITLE will expire
+
+FYI: SSL Cert for $TITLE will expire in less than 8 days.
+.
+QUIT
+EOF
+SENDMAIL 2&>1 >/dev/null
+rm "$SCLIMONDIR/login.tmp"
+}
+
+SSLMAILALARM() {
+echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+cat <<EOF >> "$SCLIMONDIR/login.tmp"
+MAIL FROM: $FROMMAIL
+rcpt to: $TOMAIL
+DATA
+From: $FROMMAIL
+Subject: [Monitoring] 🚨🚨🚨 Alarm CERT for $TITLE is expired
+
+FYI: SSL Cert for $TITLE is expired!
+.
+QUIT
+EOF
+SENDMAIL 2&>1 >/dev/null
+rm "$SCLIMONDIR/login.tmp"
+}
+# create Headline, run checks and format output to [HOST] [STATUS] [TYPE]. If check failed send email from mailbox in configured in config FROMMAIL to mailbox TOMAIL
+COMMAND() {
+HEADLINE1="HOST"
+HEADLINE2="STATUS"
+printf "%s%s%s%s %s\n" "$HEADLINE1" "${padding:${#HEADLINE1}}" "$HEADLINE2" "${padding:${#HEADLINE2}}" "TYPE"
+printf %"$COLUMNS"s |tr " " "-"
+
+for i in $SCLIMONDIR/conf/*.conf; do
+  source $i
+
+  if [ "$TYPE" == "Web" ]; then
+    if [ "$source" == "all" ]; then
+      if [ $(URLCHECK) == "1" ]; then
+        WEBCHECKPO
+      else
+        WEBCHECKNE
+      fi
+    elif [ "$source" == "dashboard" ]; then
+      if [ $(URLCHECK) == "1" ]; then
+        if [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+          rm "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+          tput clear
+
+        fi
+    else
+      WEBCHECKNE
+    fi
+  fi
+fi
+
+
+  if [ "$TYPE" == "Ping" ]; then
+    if [ "$source" == "all" ]; then
+      if [ $(PINGCHECK) == "1" ]; then
+        PINGCHECKPO
+      else
+        PINGCHECKNE
+      fi
+    elif [ "$source" == "dashboard" ]; then
+      if [ $(PINGCHECK) == "1" ]; then
+        if [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+          rm "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+          tput clear
+        fi
+      else
+        PINGCHECKNE
+      fi
+    fi
+  fi
+
+if [ "$TYPE" == "SSL" ]; then
+  EXPIRATION=$(echo $(( ($(date -d "$(SSLCHECK)" "+%s") - $(date +%s) )/(60*60*24) )) )
+    if [ "$EXPIRATION" -le "1" ]; then
+      EXPCHECK="3"
+    elif [ "$EXPIRATION" -le "7" ]; then
+      EXPCHECK="2"
+    elif [ "$EXPIRATION" -ge "7" ]; then
+      EXPCHECK="1"
+    fi
+
+      if [ "$EXPCHECK" == "1" -a "$source" == "all" ]; then
+         printf "${TXTDIM}%-20s%-36s%s%s %s\n" "$(echo $TITLE| cut -c1-20)"  "${TXTBOLD}${TXTGREEN}[OK]  ${TXTNORMAL}" "$TYPE "
+        if [[ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag || -f $SCLIMONDIR/flags/$TITLE.WARN.flag ]]; then
+         rm "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+         rm "$SCLIMONDIR/flags/$TITLE.WARN.flag"
+        fi
+
+      elif [ "$EXPCHECK" == "2" ]; then
+        printf "${TXTDIM}%-20s%-36s%s%s %s\n" "$(echo $TITLE| cut -c1-20)" "${TXTBOLD}${TXTYELLOW}[EXPIRES IN "$EXPIRATION"d] ${TXTNORMAL}" "$TYPE "
+        if  [ ! -f $SCLIMONDIR/flags/$TITLE.WARN.flag ]; then
+          SSLMAILWARN
+        fi
+      touch "$SCLIMONDIR/flags/$TITLE.WARN.flag"
+
+      elif [ "$EXPCHECK" == "3" ]; then
+        printf "%-20s%-40s%s%s %s\n" "$(echo $TITLE| cut -c1-20)" "${TXTBOLD}${TXTBLINK}${TXTRED}[EXPIRED]${TXTNORMAL}" "$TYPE "
+          if  [ ! -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+            SSLMAILALARM
+          fi
+        touch "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+      elif [ "$EXPCHECK" == "1" -a "$source" == "dashboard" ]; then
+        if [ -f $SCLIMONDIR/flags/$TITLE.ALARM.flag ]; then
+         rm "$SCLIMONDIR/flags/$TITLE.ALARM.flag"
+         tput clear
+       fi
+      fi
+    fi
+
+done | sed -e 's/^.*\[DOWN/0&/' -e 's/^.*\[EXPIRED/0&/' -e t -e 's/^.*EXPIRES/1&/' -e 's/^.*\[GOOD/3&/' -e 't' -e 's/^/2/' | sort | sed 's/^.//'
+}
+
+# Create PID File and check if process is running. In case Sclimon is already running show messages and exit.
+if [ -f $PIDFILE ]; then
+  PID=$(cat $PIDFILE)
+  ps -p $PID > /dev/null 2>&1
+  if [ $? -eq 0 ]; then
+    echo "Sclimon already running. Quit Sclimon or delete $PIDFILE"
+    exit 1
+  fi
+else
+  echo $$ > $PIDFILE
+fi
+
+# Check if the config file exists and Options are set. Delay will be default set to 10s if nothing is configured.
+# Also check if mail config are set and inform before start.
+# After the starup check run the monitoring tool in a loop and check again after the delay time.
+if [ ! -f $HOME/.config/sclimon/config ]; then
+  echo -e "There is no $HOME/.config/sclimon/config file.\nPlease create config file and set options."
+    else
+      if [ -z "$DELAY" ]; then
+        DELAY="10"
+      fi
+      if [ -z "$TRESHOLD" ]; then
+        TRESHOLD="5"
+      fi
+      if [[ -z "$FROMMAIL" || -z "$MAILSERVER" || -z "$PASSWORD" || -z "$TOMAIL" ]]; then
+        echo -e "Mail cofiguration are not set in $HOME/.config/sclimon/config.\nPlease set FROMMAIL, MAILSERVER, PASSWORD, TOMAIL to be informed about of downtimes.\nMonitoring will start in 10 seconds."
+        sleep 10;
+      fi
+      if [ ! -f $SCLIMONDIR/conf/*.conf ]; then
+        echo -e "There are no config files in $SCLIMONDIR/conf.\nPlease create a <name>.conf to be loaded."
+        exit 0
+      fi
+        tput clear
+        tput civis
+        while true; do
+          tput cup 0 0
+          COMMAND
+          sleep $DELAY
+        done
+      fi
+fi

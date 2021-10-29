@@ -1,0 +1,5 @@
+FROMMAIL="foo@example.com"
+MAILSERVER="example.com"
+PASSWORD="secret"
+TOMAIL="bar@example.com"
+DELAY="10"
