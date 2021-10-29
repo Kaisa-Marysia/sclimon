@@ -1,4 +1,4 @@
-![](https://git.elektrollart.org/Elektroll/SimpleCliMonitoring/raw/branch/master/sclimon.png)
+![](https://github.com/Kaisa-Marysia/sclimon/blob/main/sclimon.png?raw=true)
 
 # SCLIMON
 The name sclimon stands for \[**S**\]imple \[**C**\]ommand \[**L**\]ine \[**I**\]nterface \[**Mon**\]itoring.
@@ -7,7 +7,7 @@ You just need to drop a config file in the sclimon directory and run the script 
 It's possible to configure the treshold how often the checks may fail until you get a notification mail. 
 
 ## Example
-![](https://git.elektrollart.org/Elektroll/SimpleCliMonitoring/raw/branch/master/demo.gif)
+![](https://github.com/Kaisa-Marysia/sclimon/blob/main/demo.gif?raw=true)
 
 ## Installation
 
@@ -23,7 +23,7 @@ and run the script file
 
 If you trust this repo and the script file, you can drop it into in your binary directory.
 ```
-sudo curl https://git.elektrollart.org/Elektroll/SimpleCliMonitoring/raw/branch/master/simpleclimonitoring -o /usr/bin/sclimon
+sudo curl https://raw.githubusercontent.com/Kaisa-Marysia/sclimon/main/sclimon -o /usr/bin/sclimon
 sudo chmod +x /usr/bin/sclimon
 ```
 
