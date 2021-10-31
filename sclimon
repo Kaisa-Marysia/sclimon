@@ -77,7 +77,7 @@ SENDMAIL()
 
 # URL Check for *.conf files in conf/ with 'Web' TYPE
 URLCHECK() {
-curl -iL --silent "$PROTOCOL://$DOMAIN:$PORT" | grep -c "$PATTERN";
+curl -iL --silent "$PROTOCOL://$DOMAIN:$PORT" | grep -m 1 -c "$PATTERN";
 }
 
 PINGCHECK() {
