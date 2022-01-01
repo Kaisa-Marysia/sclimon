@@ -72,7 +72,7 @@ LOGIN="$SCLIMONDIR/login.tmp"
 # Sendmail via openssl client from $FROMMAIL to $TOMAIL from the configuration file 'config'
 SENDMAIL()
 {
-	openssl s_client -brief -tls1_2 -connect $MAILSERVER:465  < $LOGIN
+        openssl s_client -crlf -ign_eof -tls1_2 -connect $MAILSERVER:465 < $LOGIN
 }
 
 # URL Check for *.conf files in conf/ with 'Web' TYPE
@@ -104,7 +104,8 @@ PINGCHECKNE() {
         date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
       elif [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -eq $TRESHOLD ]]; then
         date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
-        echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+        echo "ehlo autonoe.uberspace.de" > "$SCLIMONDIR/login.tmp"
+        echo $CREDENTIALS >> "$SCLIMONDIR/login.tmp"
 cat <<EOF >> "$SCLIMONDIR/login.tmp"
 MAIL FROM: $FROMMAIL
 rcpt to: $TOMAIL
@@ -113,6 +114,7 @@ From: $FROMMAIL
 Subject: [Monitoring] 🚨🚨🚨 Alarm $TITLE is down
 
 FYI: $TITLE is down since $(head -n 1 "$SCLIMONDIR/flags/$TITLE.ALARM.flag")
+
 .
 QUIT
 EOF
@@ -140,7 +142,9 @@ WEBCHECKNE() {
          date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
        elif [[ $(wc -l < $SCLIMONDIR/flags/$TITLE.ALARM.flag) -eq $TRESHOLD ]]; then
          date >> $SCLIMONDIR/flags/$TITLE.ALARM.flag
-         echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+ 	echo "EHLO autonoe.uberspace.de" > "$SCLIMONDIR/login.tmp"
+        echo $CREDENTIALS >> "$SCLIMONDIR/login.tmp"
+
 cat <<EOF >> "$SCLIMONDIR/login.tmp"
 MAIL FROM: $FROMMAIL
 rcpt to: $TOMAIL
@@ -149,6 +153,7 @@ From: $FROMMAIL
 Subject: [Monitoring] 🚨🚨🚨 Alarm $TITLE is down
 
 FYI: $TITLE is down since $(date)
+
 .
 QUIT
 EOF
@@ -161,7 +166,9 @@ fi
 }
 
 SSLMAILWARN() {
-echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+        echo "EHLO autonoe.uberspace.de" > "$SCLIMONDIR/login.tmp"
+        echo $CREDENTIALS >> "$SCLIMONDIR/login.tmp"
+
 cat <<EOF >> "$SCLIMONDIR/login.tmp"
 MAIL FROM: $FROMMAIL
 rcpt to: $TOMAIL
@@ -170,6 +177,7 @@ From: $FROMMAIL
 Subject: [Monitoring] 🚨🚨🚨 Alarm CERT for $TITLE will expire
 
 FYI: SSL Cert for $TITLE will expire in less than 8 days.
+
 .
 QUIT
 EOF
@@ -178,7 +186,9 @@ rm "$SCLIMONDIR/login.tmp"
 }
 
 SSLMAILALARM() {
-echo $CREDENTIALS > "$SCLIMONDIR/login.tmp"
+        echo "EHLO autonoe.uberspace.de" > "$SCLIMONDIR/login.tmp"
+        echo $CREDENTIALS >> "$SCLIMONDIR/login.tmp"
+
 cat <<EOF >> "$SCLIMONDIR/login.tmp"
 MAIL FROM: $FROMMAIL
 rcpt to: $TOMAIL
@@ -187,6 +197,7 @@ From: $FROMMAIL
 Subject: [Monitoring] 🚨🚨🚨 Alarm CERT for $TITLE is expired
 
 FYI: SSL Cert for $TITLE is expired!
+
 .
 QUIT
 EOF
